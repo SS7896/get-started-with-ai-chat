@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>塔罗抽卡</title>
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 1rem; }
+      .card { border: 1px solid #ddd; padding: 0.5rem; margin: 0.5rem 0; border-radius: 6px; }
+      .position { font-weight: bold; }
+    </style>
+  </head>
+  <body>
+    <h1>塔罗抽卡</h1>
+    <form id="form">
+      <label>牌阵:
+        <select id="spread">
+          <option value="single">单牌</option>
+          <option value="three">三牌（过去/现在/未来）</option>
+          <option value="cross">十字（Celtic Cross）</option>
+        </select>
+      </label>
+      <label>张数（仅单牌有效）:
+        <input id="count" type="number" value="1" min="1" max="10" />
+      </label>
+      <button type="submit">抽牌</button>
+    </form>
+
+    <div id="result"></div>
+
+    <script>
+      const form = document.getElementById('form');
+      const result = document.getElementById('result');
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        result.innerHTML = '抽取中...';
+        const spread = document.getElementById('spread').value;
+        const count = document.getElementById('count').value;
+        const q = new URLSearchParams();
+        q.set('spread', spread);
+        if (spread === 'single') q.set('count', count || '1');
+        try {
+          const res = await fetch('/tarot/draw?' + q.toString());
+          if (!res.ok) throw new Error(await res.text());
+          const data = await res.json();
+          render(data);
+        } catch (err) {
+          result.innerHTML = '错误: ' + err.message;
+        }
+      });
+
+      function render(data) {
+        if (!data.cards || data.cards.length === 0) {
+          result.innerHTML = '<p>未抽到卡牌。</p>';
+          return;
+        }
+        result.innerHTML = '';
+        data.cards.forEach(c => {
+          const d = document.createElement('div');
+          d.className = 'card';
+          const pos = c.position ? `<div class="position">${c.position}</div>` : '';
+          d.innerHTML = `${pos}<div class="name">${c.card}</div><div class="meaning">${c.meaning}</div>`;
+          result.appendChild(d);
+        });
+      }
+    </script>
+  </body>
+</html>

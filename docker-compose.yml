@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  tarot-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile.demo
+    ports:
+      - "50505:50505"
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=50505

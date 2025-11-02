@@ -8,7 +8,8 @@ from typing import Dict
 
 import fastapi
 from fastapi import Request, Depends
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, RedirectResponse
+from jinja2.exceptions import TemplateNotFound
 from fastapi.templating import Jinja2Templates
 from azure.ai.inference.prompts import PromptTemplate
 from azure.ai.inference.aio import ChatCompletionsClient
@@ -22,6 +23,12 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from typing import Optional
 import secrets
+# Import tarot module (sibling package under src)
+try:
+    from ..tarot import tarot as tarot_module
+except Exception:
+    # If package import fails in some environments, we fall back to None.
+    tarot_module = None
 
 security = HTTPBasic()
 
@@ -77,12 +84,17 @@ def serialize_sse_event(data: Dict) -> str:
 
 @router.get("/", response_class=HTMLResponse)
 async def index_name(request: Request, _ = auth_dependency):
-    return templates.TemplateResponse(
-        "index.html", 
-        {
-            "request": request,
-        }
-    )
+    try:
+        return templates.TemplateResponse(
+            "index.html",
+            {
+                "request": request,
+            },
+        )
+    except TemplateNotFound:
+        # If the original index.html isn't present in this demo environment,
+        # redirect to the lightweight tarot demo page which we provide.
+        return RedirectResponse(url="/tarot")
 
 @router.post("/chat")
 async def chat_stream_handler(
@@ -169,3 +181,33 @@ async def chat_stream_handler(
             })
 
     return StreamingResponse(response_stream(), headers=headers)
+
+
+@router.get("/tarot/draw")
+async def tarot_draw(count: int = 1, spread: str = "single"):
+    """Endpoint to draw tarot cards. Supports `spread` parameter:
+
+    - single: draw `count` cards (default)
+    - three: past/present/future (ignores `count`)
+    - cross: Celtic Cross (10 cards)
+
+    Example: GET /tarot/draw?spread=three
+    """
+    if tarot_module is None:
+        raise HTTPException(status_code=500, detail="Tarot module not available")
+    try:
+        if spread in ("single", ""):
+            cards = tarot_module.draw(count)
+            # normalize to objects and include a 1-based position for single draws
+            cards = [{"position": str(i + 1), **c} for i, c in enumerate(cards)]
+        else:
+            cards = tarot_module.draw_spread(spread)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"spread": spread, "count": len(cards), "cards": cards}
+
+
+@router.get("/tarot", response_class=HTMLResponse)
+async def tarot_page(request: Request, _ = auth_dependency):
+    """Render small tarot UI page."""
+    return templates.TemplateResponse("tarot.html", {"request": request})

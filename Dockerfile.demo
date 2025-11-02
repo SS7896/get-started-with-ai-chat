@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy only what we need for demo (lighter build)
+COPY src/requirements.txt ./requirements.txt
+COPY src/ ./src/
+COPY api/templates/ ./api/templates/
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Use environment-configurable port (default 50505)
+ARG PORT=50505
+ENV PORT=${PORT}
+EXPOSE ${PORT}
+
+# Use the lightweight demo runner (skips Azure lifespan)
+# Start uvicorn on the configured PORT
+CMD ["sh", "-c", "PYTHONPATH=. uvicorn \"scripts.run_tarot_demo:app\" --host 0.0.0.0 --port ${PORT}"]
